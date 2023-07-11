@@ -1,54 +1,51 @@
-
-'''@author: songcongcong'''
-
-
-# 三次卷积的核函数
-def S(x):
-    if abs(x) <= 1:
-        y = 1 - 2 * np.power(x, 2) + abs(np.power(x, 3))
-    elif abs(x) > 1 and abs(x) < 2:
-        y = 4 - 8 * abs(x) + 5 * np.power(x, 2) - abs(np.power(x, 3))
-    else:
-        y = 0
-    return y
+im_path = '/media/zou/D/000003072.jpg'
+import matplotlib.pyplot as plt
+# load
+import core
+import torch
+from PIL import Image
+import numpy as np
 
 
-# 三次卷积插值
-def bicubic_interpolation(src, dst_shape):
-    # 获取原图维度
-    src_height, src_width = src.shape[0], src.shape[1]
-    # 计算新图维度 注意channel数要想同
-    dst_height, dst_width, channels = dst_shape[0], dst_shape[1], dst_shape[2]
+def bilinear_interpolation(img, out_dim):
+    src_h, src_w, channels = img.shape
+    dst_h, dst_w = out_dim[1], out_dim[0]
+    print("src_h,src_w= ", src_h, src_w)
+    print("dst_h,dst_w= ", dst_h, dst_w)
+    if src_h == dst_h and src_w == dst_w:
+        return img.copy()
+    dst_img = np.zeros((dst_h, dst_w, 3), dtype=np.uint8)
+    scale_x, scale_y = float(src_w) / dst_w, float(src_h) / dst_h
+    for i in range(3):
+        for dst_y in range(dst_h):
+            for dst_x in range(dst_w):
+                # 根据几何中心重合找出目标像素的坐标
+                src_x = (dst_x + 0.5) * scale_x - 0.5
+                src_y = (dst_y + 0.5) * scale_y - 0.5
+                # 找出目标像素最邻近的四个点
+                src_x0 = int(np.floor(src_x))
+                src_x1 = min(src_x0 + 1, src_w - 1)
+                src_y0 = int(np.floor(src_y))
+                src_y1 = min(src_y0 + 1, src_h - 1)
 
-    dst = np.zeros(shape=(dst_height, dst_width, channels), dtype=np.uint8)
-    for dst_x in range(dst_height):
-        for dst_y in range(dst_width):
-            # 寻找源图像对应坐标
-            src_x = (dst_x + 0.5) * (src_width / dst_width) - 0.5
-            src_y = (dst_y + 0.5) * (src_width / dst_width) - 0.5
-            i, j = int(src_x), int(src_y)
-            u, v = src_x - i, src_y - j
+                # 代入公式计算
+                temp0 = (src_x1 - src_x) * img[src_y0, src_x0, i] + (src_x - src_x0) * img[src_y0, src_x1, i]
+                temp1 = (src_x1 - src_x) * img[src_y1, src_x0, i] + (src_x - src_x0) * img[src_y1, src_x1, i]
+                dst_img[dst_y, dst_x, i] = int((src_y1 - src_y) * temp0 + (src_y - src_y0) * temp1)
 
-            # 边界条件
-            x1 = min(max(0, i - 1), src_height - 4)
-            x2 = x1 + 4
-            y1 = min(max(0, j - 1), src_width - 4)
-            y2 = y1 + 4
+    return dst_img
 
-            # 计算双三次插值
-            A = np.array([S(u + 1), S(u), S(u - 1), S(u - 2)])
-            C = np.array([S(v + 1), S(v), S(v - 1), S(v - 2)])
-            B = src[x1:x2, y1:y2]
-            f0 = [A @ B[..., i] @ C.T for i in range(channels)]
-            f1 = np.stack(f0)
-            f = np.clip(f1, 0, 255)  # 处理一下越界的数据
+img = plt.imread('/media/zou/D/000003072.jpg')
+print('img',img.shape)
 
-            # 插值
-            dst[dst_x, dst_y, :] = f.astype(np.uint8)
-    return dst
-
-im_path = '/media/zou/D/dataset/im0002.jpg'
-image = np.array(Image.open(im_path))
-image2 = bicubic_interpolation(image,[128,128,3])
-image2 = Image.fromarray(image2.astype('uint8')).convert('RGB')
-image2.save('/media/zou/D/dataset/BiCubic_interpolation.jpg')
+img1 = bilinear_interpolation(img,[128,128])
+print('img1',img1.shape)
+#读取后的dtype为float32（属于numpy），范围是[0,1]
+#读取后的形状是（H,W,C），RGB
+# show
+plt.imshow(img)
+plt.imshow(img1)
+plt.axis('off')
+plt.show()
+# save
+plt.imsave('/media/zou/D/lr000003072.jpg',img1)
